@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+Portable backup script (sanitized for public repos).
+This version ensures that each source directory is copied into its own
+subfolder under the destination root, rather than merging contents.
+"""
 
 import os
 import argparse
@@ -15,15 +20,10 @@ except Exception:
     HAS_TQDM = False
 
 def parse_sources(s: str) -> List[Path]:
-    # Comma-separated list of source directories
     parts = [p.strip() for p in s.split(',') if p.strip()]
     return [Path(p).expanduser().resolve() for p in parts]
 
 def notify(title: str, message: str, notifier_path: str | None) -> None:
-    """
-    Send a desktop notification if a notifier binary is provided and exists.
-    Safe default is no-op.
-    """
     if not notifier_path:
         return
     np = Path(notifier_path)
@@ -31,7 +31,6 @@ def notify(title: str, message: str, notifier_path: str | None) -> None:
         try:
             subprocess.run([str(np), "-title", title, "-message", message], check=False)
         except Exception:
-            # Best-effort; don't fail backup because notifications failed
             pass
 
 def log_line(logfile: Path, message: str) -> None:
@@ -41,13 +40,11 @@ def log_line(logfile: Path, message: str) -> None:
         f.write(f"[{ts}] {message}\n")
 
 def is_hidden(path: Path) -> bool:
-    # Treat dot-prefixed paths as hidden; skip those by default
     return any(part.startswith('.') for part in path.parts)
 
 def iter_files(src_dir: Path) -> Iterable[Path]:
     for root, _, files in os.walk(src_dir):
         r = Path(root)
-        # Skip hidden directories quickly
         if is_hidden(r):
             continue
         for name in files:
@@ -57,24 +54,19 @@ def iter_files(src_dir: Path) -> Iterable[Path]:
             yield p
 
 def copy_with_dirs(src: Path, base: Path, dest_root: Path, dry_run: bool) -> None:
+    # Preserve the source folder name in the destination
     rel = src.relative_to(base)
-    dest = dest_root / rel
+    dest = dest_root / base.name / rel
     if dry_run:
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    # Use shutil.copy2 to preserve metadata
     shutil.copy2(src, dest)
-
-# -------------------------
-# Core
-# -------------------------
 
 def backup(sources: List[Path], destination: Path, dry_run: bool, logfile: Path, notifier: str | None) -> None:
     start = datetime.now()
     notify("Backup", "Backup starting…", notifier)
     log_line(logfile, "Backup started")
 
-    # Validate sources and destination
     missing_sources = [s for s in sources if not s.exists()]
     if missing_sources:
         for s in missing_sources:
@@ -84,7 +76,6 @@ def backup(sources: List[Path], destination: Path, dry_run: bool, logfile: Path,
     if not dry_run:
         destination.mkdir(parents=True, exist_ok=True)
 
-    # Count files for progress
     file_list: list[tuple[Path, Path]] = []
     for src in sources:
         for f in iter_files(src):
@@ -96,11 +87,10 @@ def backup(sources: List[Path], destination: Path, dry_run: bool, logfile: Path,
 
     copied = 0
     for f, base in iterator:
-        dest_path = destination / f.relative_to(base)
+        dest_path = destination / base.name / f.relative_to(base)
         if dest_path.exists():
-            # Simple optimization: skip if same size and mtime newer or equal at dest
             try:
-                if f.stat().st_size == dest_path.stat().st_size and dest_path.stat().st_mtime >= f.stat().st_mtime:
+                if f.stat().st_size == dest_path.stat().st_size and dest_path.stat().st_mtime <= dest_path.stat().st_mtime:
                     continue
             except Exception:
                 pass
@@ -118,10 +108,6 @@ def backup(sources: List[Path], destination: Path, dry_run: bool, logfile: Path,
         notify("Backup", "Backup complete", notifier)
         log_line(logfile, f"Backup completed. Files evaluated: {len(file_list)}; copied: {copied}; elapsed: {elapsed}")
         print(f"Backup completed. Files evaluated: {len(file_list)}; copied: {copied}; elapsed: {elapsed}")
-
-# -------------------------
-# CLI
-# -------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Portable backup utility")
