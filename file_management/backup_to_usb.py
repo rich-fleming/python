@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""
-Portable backup script (sanitized for public repos).
-
-This version ensures that each source directory is copied into its own
-subfolder under the destination root, preserving the exact source folder
-name (including spaces).
-"""
 
 import os
 import argparse
