@@ -18,7 +18,7 @@ This is a sanitized, portable Python backup utility. It is safe for public repos
 Clone this repository and ensure you have Python 3.8+ installed.
 
 ```bash
-git clone https://github.com/yourusername/yourrepo.git
+git clone https://github.com/rich-fleming/python.git
 cd yourrepo
 pip install -r requirements.txt
 ```
