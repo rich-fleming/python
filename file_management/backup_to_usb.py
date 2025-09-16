@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
 Portable backup script (sanitized for public repos).
+
 This version ensures that each source directory is copied into its own
-subfolder under the destination root, rather than merging contents.
+subfolder under the destination root, preserving the exact source folder
+name (including spaces).
 """
 
 import os
@@ -53,10 +55,14 @@ def iter_files(src_dir: Path) -> Iterable[Path]:
                 continue
             yield p
 
+def get_exact_folder_name(path: Path) -> str:
+    # Preserve the exact final component string, including spaces
+    return str(path).rstrip(os.sep).split(os.sep)[-1]
+
 def copy_with_dirs(src: Path, base: Path, dest_root: Path, dry_run: bool) -> None:
-    # Preserve the source folder name in the destination
     rel = src.relative_to(base)
-    dest = dest_root / base.name / rel
+    folder_name = get_exact_folder_name(base)
+    dest = dest_root / folder_name / rel
     if dry_run:
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -87,7 +93,8 @@ def backup(sources: List[Path], destination: Path, dry_run: bool, logfile: Path,
 
     copied = 0
     for f, base in iterator:
-        dest_path = destination / base.name / f.relative_to(base)
+        folder_name = get_exact_folder_name(base)
+        dest_path = destination / folder_name / f.relative_to(base)
         if dest_path.exists():
             try:
                 if f.stat().st_size == dest_path.stat().st_size and dest_path.stat().st_mtime <= dest_path.stat().st_mtime:
